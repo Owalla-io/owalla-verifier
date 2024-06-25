@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prize Draw Verifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              black: '#000',
+              white: '#fff',
+              gray: {
+                100: '#f7fafc',
+                200: '#edf2f7',
+                300: '#e2e8f0',
+                400: '#cbd5e0',
+                500: '#a0aec0',
+                600: '#718096',
+                700: '#4a5568',
+                800: '#2d3748',
+                900: '#1a202c',
+              },
+              blue: {
+                100: '#ebf8ff',
+                200: '#bee3f8',
+                300: '#90cdf4',
+                400: '#63b3ed',
+                500: '#4299e1',
+                600: '#3182ce',
+                700: '#2b6cb0',
+                800: '#2c5282',
+                900: '#2a4365',
+              },
+              indigo: {
+                100: '#ebf4ff',
+                200: '#c3dafe',
+                300: '#a3bffa',
+                400: '#7f9cf5',
+                500: '#667eea',
+                600: '#5a67d8',
+                700: '#4c51bf',
+                800: '#434190',
+                900: '#3c366b',
+              },
+              green: {
+                100: '#f0fff4',
+                200: '#c6f6d5',
+                300: '#9ae6b4',
+                400: '#68d391',
+                500: '#48bb78',
+                600: '#38a169',
+                700: '#2f855a',
+                800: '#276749',
+                900: '#22543d',
+              },
+              teal: {
+                100: '#e6fffa',
+                200: '#b2f5ea',
+                300: '#81e6d9',
+                400: '#4fd1c5',
+                500: '#38b2ac',
+                600: '#319795',
+                700: '#2c7a7b',
+                800: '#285e61',
+                900: '#234e52',
+              },
+            }
+          }
+        }
+      }
+    </script>
+    <script>
+      function getJsonFromUrl() {
+          const query = window.location.search.substring(1);
+          const params = new URLSearchParams(query);
+          const data = params.get('data');
+          return data ? JSON.parse(decodeURIComponent(data)) : null;
+      }
+
+      function populatePrizes(data) {
+          if (!data) return;
+          document.getElementById('blockhash').value = data.blockhash;
+          document.getElementById('tickets').value = data.tickets;
+          data.prizes.forEach((prize, index) => {
+              addPrize();
+              const prizeRows = document.querySelectorAll('.prize-item');
+              const lastPrizeRow = prizeRows[prizeRows.length - 1];
+              lastPrizeRow.querySelector('.prize-type').value = prize.type;
+              if (prize.type === 'chance') lastPrizeRow.querySelector('.prize-type').selectedIndex = 0;
+              else lastPrizeRow.querySelector('.prize-type').selectedIndex = 1;
+              lastPrizeRow.querySelector('.prize-value').value = prize.value;
+              lastPrizeRow.querySelector('.prize-magic').value = prize.magic;
+          });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+          const jsonData = getJsonFromUrl();
+          populatePrizes(jsonData);
+      });
+
+      function addPrize() {
+          const prizeList = document.getElementById('prize-list');
+          const prizeRow = document.createElement('div');
+
+          // Get the index
+          const index = prizeList.children.length + 1;
+
+          prizeRow.className = 'prize-item mb-4 p-4 border border-gray-200 rounded-md text-xs sm:text-sm text-gray-700';
+          prizeRow.innerHTML = `
+            <h1 class="text-lg font-bold underline text-black">Prize ${index}</h1>
+            <div class="flex flex-row justify-between items-center">
+              <h1 class="w-1/2 text-md font-semibold text-black">Prize Type</h1>
+              <select class="prize-type w-1/2 mt-1 block w-full px-1 py-2 border-gray-30 rounded-md">
+                <option value="chance">Chance</option>
+                <option value="fix">Fixed</option>
+              </select>
+            </div>
+            <div class="flex flex-row justify-between items-center">
+              <h1 class="w-1/2 text-md font-semibold text-black">Prize Value</h1>
+              <input type="number" class="w-1/2 prize-value mt-1 block w-full px-1 py-2 border border-gray-300 rounded-md">
+            </div>
+            <div class="flex flex-row justify-between items-center">
+              <h1 class="w-1/2 text-md font-semibold text-black">Magic Number/Quantity</h1>
+              <input type="number" class="w-1/2 prize-magic mt-1 block w-full px-1 py-2 border border-gray-300 rounded-md">
+            </div>
+            
+            <button type="button" class="mt-2 w-full remove-prize border border-red-500 bg-white text-red-500 px-3 py-1 rounded-md" onclick="removePrize(this)">Remove</button>
+          `;
+          prizeList.appendChild(prizeRow);
+      }
+
+      function removePrize(button) {
+          button.closest('.prize-item').remove();
+      }
+
+      function verifyDraw() {
+          const blockhashInput = document.getElementById('blockhash').value;
+          const tickets = parseInt(document.getElementById('tickets').value);
+          const maxNumber = BigInt(tickets);
+          const blockhash = BigInt(blockhashInput);
+          const prizes = document.querySelectorAll('.prize-item');
+
+          let resultDiv = document.getElementById('result');
+          resultDiv.innerHTML = '';
+
+          prizes.forEach((prize, index) => {
+            // Get the prize type and value
+            const prizeType = prize.querySelector('.prize-type').value;
+            const prizeValue = prize.querySelector('.prize-value').value;
+            const prizeQuantity = prize.querySelector('.prize-magic').value;
+
+            const resultItem = document.createElement('div');
+            resultItem.className = 'mb-2 bg-yellow-100 items-center p-2 rounded-xl shadow-xl w-full';
+
+            // Add the prize div
+            const prizeDiv = document.createElement('div');
+            prizeDiv.className = 'flex flex-row justify-between items-center';
+
+            const prizeValueDiv = document.createElement('h1');
+            prizeValueDiv.className = 'text-md font-bold text-indigo-800';
+            prizeValueDiv.textContent = `${prizeType.toUpperCase()} Prize: ${prizeValue}`;
+
+            const prizeQuantityDiv = document.createElement('p');
+            prizeQuantityDiv.className = 'text-md text-orange-600 font-bold';
+            prizeQuantityDiv.textContent = `x${prizeQuantity}`;
+
+            prizeDiv.appendChild(prizeValueDiv);
+            prizeDiv.appendChild(prizeQuantityDiv);
+            resultItem.appendChild(prizeDiv);
+
+            // Create the winning numbers div
+            const winningNumbersDiv = document.createElement('div');
+            winningNumbersDiv.className = 'grid grid-cols-2 sm:grid-cols-6 gap-1 items-center justify-center bg-transparent mt-2';
+            
+            // Chance prize Calculation
+            if (prizeType === 'chance') {
+              const prizeChance = prize.querySelector('.prize-magic').value;
+              const winningNumber = blockhash % BigInt(prizeChance);
+
+              // Add the winning number
+              const winningDiv = document.createElement('span');
+              winningDiv.className = 'text-xs text-center font-bold text-gray-50 bg-indigo-800 p-1 rounded';
+              winningDiv.textContent = Number(winningNumber);
+              winningNumbersDiv.appendChild(winningDiv);
+            }
+            // Fixed prize Calculation
+            else {
+              const winningNumbers = [];
+              for (let j = 0; j < prizeQuantity; j++) {
+                // Calculate the winner number
+                const winnerIndex = BigInt(j + 1);
+                const winnerNumber = Number(
+                  (blockhash * BigInt(index + 1) * winnerIndex) % maxNumber
+                );
+
+                winningNumbers.push(winnerNumber);
+              }
+
+              // Sort the winning numbers
+              winningNumbers.sort((a, b) => a - b);
+              for (let j = 0; j < prizeQuantity; j++) {
+                // Add the winning number
+                const winningDiv = document.createElement('span');
+                winningDiv.className = 'text-xs text-center font-bold text-gray-50 bg-indigo-800 p-1 rounded';
+                winningDiv.textContent = winningNumbers[j];
+                winningNumbersDiv.appendChild(winningDiv);
+              }
+            }
+            
+            // Add the winning numbers div
+            resultItem.appendChild(winningNumbersDiv);
+
+            // Add the result item to the result div
+            resultDiv.appendChild(resultItem);
+          });
+      }
+    </script>
+</head>
+<body class="mx-auto bg-white p-6 overflow-x-auto">
+  <div class="flex flex-row items-center justify-between">
+    <h1 class="text-2xl font-bold mb-4">Prize Draw Verifier</h1>
+    <a href="https://github.com/Owalla-io/owalla-verifier" target="_blank" class="bg-black px-3 py-1 text-white rounded-md">Github</a>
+  </div>
+  <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Blockhash (0x....):</label>
+      <input type="text" id="blockhash" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+  </div>
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700">Total Tickets</label>
+    <input type="number" step="1" id="tickets" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+  </div>
+  <div id="prize-list"></div>
+  <button type="button" class="bg-blue-500 text-white px-3 py-1 rounded-md mb-4" onclick="addPrize()">Add Prize</button>
+  <button type="button" class="bg-green-500 text-white px-3 py-1 rounded-md" onclick="verifyDraw()">Verify Draw</button>
+  <div id="result" class="mt-4"></div>
+</body>
+</html>
