@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prize Draw Verifier</title>
+    <script src="https://cdn.sheetjs.com/crc-32-latest/package/crc32.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -82,7 +83,7 @@
 
       function populatePrizes(data) {
           if (!data) return;
-          document.getElementById('blockhash').value = data.blockhash;
+          document.getElementById('seed').value = data.seed;
           document.getElementById('tickets').value = data.tickets;
           data.prizes.forEach((prize, index) => {
               addPrize();
@@ -134,17 +135,39 @@
 
       function removePrize(button) {  button.closest('.prize-item').remove(); }
 
-      function verifyDraw() {
-          const blockhashInput = document.getElementById('blockhash').value;
+      async function hash(message) {
+        // Encode the message as a Uint8Array
+        const msgBuffer = new TextEncoder().encode(message);
+
+        // Hash the message
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+
+        // Convert ArrayBuffer to Array
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+        // Convert bytes to hex string
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        return hashHex;
+      }
+
+      async function verifyDraw() {
+          const seedInput = document.getElementById('seed').value;
           const tickets = parseInt(document.getElementById('tickets').value);
           const maxNumber = BigInt(tickets);
-          const blockhash = BigInt(blockhashInput);
+          // Final Seed
+          const seed = BigInt(seedInput) * maxNumber;
           const prizes = document.querySelectorAll('.prize-item');
 
           let resultDiv = document.getElementById('result');
           resultDiv.innerHTML = '';
 
-          prizes.forEach((prize, index) => {
+          // Compute the Seed to Draw ID
+          const seedHash = await hash(seedInput);
+          const drawId = CRC32.str(seedHash).toString();
+          document.getElementById('drawId').value = drawId;
+
+          prizes.forEach(async (prize, index) => {
             // Get the prize type and value
             const prizeType = prize.querySelector('.prize-type').value;
             const prizeValue = prize.querySelector('.prize-value').value;
@@ -176,7 +199,7 @@
             // Chance prize Calculation
             if (prizeType === 'chance') {
               const prizeChance = prize.querySelector('.prize-magic').value;
-              const winningNumber = blockhash % BigInt(prizeChance);
+              const winningNumber = seed % BigInt(prizeChance);
 
               // Add the winning number
               const winningDiv = document.createElement('span');
@@ -187,13 +210,12 @@
             // Fixed prize Calculation
             else {
               const winningNumbers = [];
-              for (let j = 0; j < prizeQuantity; j++) {
+              const prizeIndex = BigInt(index + 1);
+              for (let j = 0; j < prizeQuantity; j++) {                
                 // Calculate the winner number
                 const winnerIndex = BigInt(j + 1);
-                const winnerNumber = Number(
-                  (blockhash * BigInt(index + 1) * winnerIndex) % maxNumber
-                );
-
+                const prizeHash = await hash(`${seed.toString(16)}|${prizeIndex.toString(16)}|${winnerIndex.toString(16)}`);
+                const winnerNumber = Number(BigInt('0x' + prizeHash) % maxNumber);
                 winningNumbers.push(winnerNumber);
               }
 
@@ -223,12 +245,16 @@
     <a href="https://github.com/Owalla-io/owalla-verifier" target="_blank" class="bg-black px-3 py-1 text-white rounded-md">Github</a>
   </div>
   <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Blockhash (0x....):</label>
-      <input type="text" id="blockhash" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+      <label class="block text-sm font-medium text-gray-700">Draw Seed (0x....):</label>
+      <input type="text" id="seed" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
   </div>
   <div class="mb-4">
     <label class="block text-sm font-medium text-gray-700">Total Tickets</label>
     <input type="number" step="1" id="tickets" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+  </div>
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700">Computed Draw ID (provided beforehand as a proof)</label>
+    <input readonly type="text" id="drawId" class="mt-1 bg-gray-100 block w-full px-1 py-2 border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
   </div>
   <div id="prize-list"></div>
   <button type="button" class="bg-blue-500 text-white px-3 py-1 rounded-md mb-4" onclick="addPrize()">Add Prize</button>
